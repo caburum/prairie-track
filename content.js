@@ -67,6 +67,29 @@
         <tbody></tbody>
       </table>
     `;
+    const timeRemaining = /* js */ `
+      // https://gist.github.com/alirezas/4b4488d6f9eced7b65ca9c5f73a52230
+      function getTimeRemaining(end) {
+        var t = Date.parse(end) - Date.parse(new Date());
+        var seconds = Math.floor((t / 1000) % 60);
+        var minutes = Math.floor((t / 1000 / 60) % 60);
+        var hours = Math.floor((t / (1000 * 60 * 60)) % 24);
+        var days = Math.floor(t / (1000 * 60 * 60 * 24));
+        return {
+          total: t,
+          days: days,
+          hours: hours,
+          minutes: minutes,
+          seconds: seconds,
+        };
+      }
+      function dueToDate(dueString) {
+        const time = dueString.split(", ");
+        return new Date(new Date().getFullYear() + ' ' + time[1] + ' ' + time[2]);
+      }
+      const time = getTimeRemaining(dueToDate(this.getAttribute('data-due')));
+      this.innerHTML = time.days + 'd ' + time.hours + 'h ' + time.minutes + 'm remain';
+    `;
     // format date
     if (isAssessmentsPage) {
       rows.forEach((row) => {
@@ -79,20 +102,23 @@
           .trim()
           .split(", ");
         [time[0], time[1], time[2]] = [time[1], time[2], time[0]];
-        due.innerHTML = time.join(", ");
+        due.setAttribute("data-due", time.join(", "));
+        due.innerHTML = due.getAttribute("data-due");
+        due.setAttribute("onmouseenter", timeRemaining);
+        due.setAttribute(
+          "onmouseleave",
+          "this.innerHTML = this.getAttribute('data-due')"
+        );
       });
+    }
+    function dueToDate(dueString) {
+      const time = dueString.split(", ");
+      return new Date(`${new Date().getFullYear()} ${time[1]} ${time[2]}`);
     }
     // sort by date
     rows = rows.sort((a, b) => {
-      const aTime = a.children[2].innerHTML.split(", ");
-      const aDate = new Date(
-        `${new Date().getFullYear()} ${aTime[1]} ${aTime[2]}`
-      );
-      console.log(`${new Date().getFullYear()} ${aTime[1]} ${aTime[2]}`);
-      const bTime = b.children[2].innerHTML.split(", ");
-      const bDate = new Date(
-        `${new Date().getFullYear()} ${bTime[1]} ${bTime[2]}`
-      );
+      const aDate = dueToDate(a.children[2].innerHTML);
+      const bDate = dueToDate(b.children[2].innerHTML);
       return aDate - bDate;
     });
     // update local storage
