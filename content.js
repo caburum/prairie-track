@@ -41,10 +41,10 @@
       document.querySelectorAll(&quot;a[href^='/pl/course_instance/']:not([href$='/'])&quot;).forEach((a) => {
         window.open(a.href + '/assessments?reload');
       });
+      window.addEventListener('storage', function () {
+        window.location.reload();
+      });
     `;
-    window.addEventListener("storage", function () {
-      window.location.reload();
-    });
     div.innerHTML = /* html */ `
       <div class="card-header bg-primary text-white d-flex align-items-center">PrairieTrack<sup>beta</sup><small style="opacity: 50%">&nbsp;by Anthony Du</small>
         <button type="button" class="btn btn-light btn-sm ml-auto ${
