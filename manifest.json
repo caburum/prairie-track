@@ -1,6 +1,6 @@
 {
   "name": "PrairieTrack - PrairieLearn Tracker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Keep track of PrairieLearn and PrairieTest!",
   "manifest_version": 3,
   "author": "Anthony Du",
@@ -19,5 +19,6 @@
       "matches": ["*://*.prairielearn.com/*"],
       "js": ["content.js"]
     }
-  ]
+  ],
+  "permissions": ["storage", "activeTab"]
 }
