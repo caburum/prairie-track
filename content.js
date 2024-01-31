@@ -67,17 +67,6 @@
         <tbody></tbody>
       </table>
     `;
-    if (isPrairieLearnPage) {
-      rows.forEach((row) => {
-        console.log(
-          row.children[1].querySelector("a").href.split("_instance")[0]
-        );
-        row.children[1].querySelector("a").href =
-          row.children[1]
-            .querySelector("a")
-            .href.split("assessment_instance")[0] + "assessments";
-      });
-    }
     // format date
     if (isAssessmentsPage) {
       rows.forEach((row) => {
