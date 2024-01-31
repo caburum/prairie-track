@@ -46,7 +46,7 @@
       window.location.reload();
     });
     div.innerHTML = /* html */ `
-      <div class="card-header bg-primary text-white d-flex align-items-center">PrairieTrack<sup style="opacity: 90%">beta</sup><small style="opacity: 50%"> by Anthony Du</small>
+      <div class="card-header bg-primary text-white d-flex align-items-center">PrairieTrack<sup>beta</sup><small style="opacity: 50%">&nbsp;by Anthony Du</small>
         <button type="button" class="btn btn-light btn-sm ml-auto ${
           isPrairieLearnPage ? "" : "d-none"
         }" onclick="${reloadRows}">
