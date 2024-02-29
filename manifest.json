@@ -1,6 +1,6 @@
 {
   "name": "PrairieTrack - PrairieLearn Tracker",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Keep track of PrairieLearn and PrairieTest!",
   "manifest_version": 3,
   "author": "Anthony Du",

@@ -21,10 +21,12 @@
     /** @type Element[] */
     let rows = [];
     let courseCode = "";
+    let courseHref = "";
     if (isAssessmentsPage) {
       courseCode = document
         .querySelector("#main-nav > li.nav-item.mr-4 > span")
         .innerHTML.split(",")[0];
+      courseHref = window.location.href.split("?")[0];
       rows = Array.from(
         document.querySelectorAll("#content > div > table > tbody > tr:has(td)")
       );
@@ -132,6 +134,7 @@
       const key = `prairieTrack-${window.location.pathname.split("/")[3]}`;
       rows.forEach((row) => {
         row.children[0].setAttribute("data-course-code", courseCode);
+        row.children[0].setAttribute("data-course-href", courseHref);
       });
       window.localStorage.setItem(
         key,
@@ -143,11 +146,13 @@
       // add course code
       if (isPrairieLearnPage) {
         const td = document.createElement("td");
-        td.classList.add("align-middle");
-        td.style.width = "1%";
-        td.innerHTML = row.children[0]
+        const anchor = document.createElement("a");
+        anchor.innerHTML = row.children[0]
           .getAttribute("data-course-code")
           .replace(" ", "&nbsp;");
+        anchor.href = row.children[0].getAttribute("data-course-href");
+        td.appendChild(anchor);
+        td.style.width = "1%";
         row.insertBefore(td, row.children[0]);
       }
       div.getElementsByTagName("tbody")[0].appendChild(row);
