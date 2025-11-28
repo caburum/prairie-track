@@ -1,11 +1,11 @@
 (() => {
   "use strict";
-  const isAssessmentsPage = window.location.pathname.endsWith("assessments");
-  const isPrairieLearnPage = window.location.pathname.endsWith("pl");
+  const isAssessmentsPage = location.pathname.endsWith("assessments");
+  const isPrairieLearnPage = location.pathname === "/" || location.pathname.endsWith("pl");
   if (!isAssessmentsPage && !isPrairieLearnPage) {
     return;
   }
-  if (window.location.search.includes("reload")) {
+  if (location.search.includes("reload")) {
     const div = document.createElement("div");
     div.style = `position: fixed; inset: 0; z-index: 9999; background-color:#fff;`;
     div.innerHTML = /* html */ `
@@ -29,7 +29,7 @@
     });
     window.addEventListener('storage', function () {
       console.log('storage event detected');
-      if (--i === 0) window.location.reload();
+      if (--i === 0) location.reload();
     });
   `;
   try {
@@ -41,7 +41,7 @@
       courseCode = document
         .querySelector("#main-nav > li:first-child")
         .innerText.trim().split(",")[0];
-      courseHref = window.location.href.split("?")[0];
+      courseHref = location.href.split("?")[0];
       rows = Array.from(
         document.querySelectorAll("#content table > tbody > tr:has(td)")
       );
@@ -152,7 +152,7 @@
     });
     // update local storage
     if (isAssessmentsPage) {
-      const key = `prairieTrack-${window.location.pathname.split("/")[3]}`;
+      const key = `prairieTrack-${location.pathname.split("/")[3]}`;
       rows.forEach((row) => {
         row.children[0].setAttribute("data-course-code", courseCode);
         row.children[0].setAttribute("data-course-href", courseHref);
@@ -203,7 +203,7 @@
       </table>
     `;
   }
-  if (window.location.search.includes("reload")) {
+  if (location.search.includes("reload")) {
     window.close();
   }
 })();
