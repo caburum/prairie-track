@@ -14,6 +14,7 @@
   
   // Configuration
   const STALE_TIME_MS = 3 * 60 * 60 * 1000; // 3 hours
+  const RELOAD_DELAY_MS = 500; // Delay before reloading page after successful fetch
   
   // Toast notification helper
   function showToast(message, type = 'info') {
@@ -87,25 +88,42 @@
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       
-      // Extract course code
+      // Extract course code (selector depends on PrairieLearn's DOM structure)
       const courseCode = doc.querySelector("#main-nav > li:first-child")?.innerText.trim().split(",")[0];
-      if (!courseCode) return null;
+      if (!courseCode) {
+        console.warn(`Could not extract course code from ${courseUrl}`);
+        return null;
+      }
       
-      // Extract assessment rows
+      // Extract assessment rows (selector depends on PrairieLearn's table structure)
       const rowElements = Array.from(doc.querySelectorAll("#content table > tbody > tr:has(td)"));
+      if (rowElements.length === 0) {
+        console.warn(`No assessment rows found for ${courseUrl}`);
+        return null;
+      }
+      
       const rows = rowElements.map((row) => row.cloneNode(true));
       const filteredRows = rows.filter((row) => {
-        let grade = parseFloat(row.children[3].innerText);
+        // Filter for incomplete assessments with upcoming due dates
+        // Note: This depends on PrairieLearn's column order and content format
+        if (row.children.length < 4) return false;
+        
+        const dueColumn = row.children[2];
+        const gradeColumn = row.children[3];
+        
+        let grade = parseFloat(gradeColumn.innerText);
         return (
-          row.children[2].innerHTML.includes("until") &&
+          dueColumn.innerHTML.includes("until") &&
           (isNaN(grade) || grade < 100)
         );
       });
       
       // Add course metadata to rows
       filteredRows.forEach((row) => {
-        row.children[0].setAttribute("data-course-code", courseCode);
-        row.children[0].setAttribute("data-course-href", courseUrl);
+        if (row.children.length > 0) {
+          row.children[0].setAttribute("data-course-code", courseCode);
+          row.children[0].setAttribute("data-course-href", courseUrl);
+        }
       });
       
       return {
@@ -148,7 +166,7 @@
     try {
       await Promise.all(promises);
       showToast('Assessments reloaded successfully!', 'success');
-      setTimeout(() => location.reload(), 500);
+      setTimeout(() => location.reload(), RELOAD_DELAY_MS);
     } catch (error) {
       console.error('Error reloading assessments:', error);
       showToast('Error reloading assessments', 'error');
@@ -202,7 +220,7 @@
         if (hasStaleData) {
           showToast('Assessment data is stale, refreshing...', 'info');
           // Wait a bit before reloading to ensure UI is ready
-          setTimeout(() => reloadRows(), 500);
+          setTimeout(() => reloadRows(), RELOAD_DELAY_MS);
         }
       }
       
