@@ -22,7 +22,7 @@ A userscript for tracking PrairieLearn and PrairieTest assessments.
 2. Install PrairieTrack:
    - Click on the userscript manager icon in your browser
    - Select "Create a new script" or "+" button
-   - Copy the contents of `content.js` into the editor
+   - Copy the contents of `PrairieTrack.user.js` into the editor
    - Save the script
 
 3. Navigate to any PrairieLearn page and the script will automatically run!
@@ -42,7 +42,7 @@ The Chrome extension files (manifest.json, popup.html) are still included for ba
 
 ## Development
 
-The main script is in `content.js` which includes:
+The main script is in `PrairieTrack.user.js` which includes:
 - Userscript metadata block
 - Toast notification system
 - Fetch-based scraping (no popups!)

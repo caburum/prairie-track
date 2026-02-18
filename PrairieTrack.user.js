@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         PrairieTrack - PrairieLearn Tracker
+// @name         PrairieTrack
 // @namespace    https://github.com/caburum/prairie-track
 // @version      0.5.0
 // @description  Keep track of PrairieLearn and PrairieTest!
