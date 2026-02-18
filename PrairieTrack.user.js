@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PrairieTrack
 // @namespace    https://github.com/caburum/prairie-track
-// @version      1.2.0
+// @version      1.3.0
 // @description  Keep track of PrairieLearn and PrairieTest!
 // @author       caburum
 // @match        *://*.prairielearn.com/*
@@ -75,6 +75,80 @@
 	function isDataStale(timestamp) {
 		if (!timestamp) return true;
 		return Date.now() - timestamp > STALE_TIME_MS;
+	}
+	
+	// Helper functions for time remaining calculations
+	function getTimeRemaining(end) {
+		var t = Date.parse(end) - Date.parse(new Date());
+		var seconds = Math.floor((t / 1000) % 60);
+		var minutes = Math.floor((t / 1000 / 60) % 60);
+		var hours = Math.floor((t / (1000 * 60 * 60)) % 24);
+		var days = Math.floor(t / (1000 * 60 * 60 * 24));
+		return {
+			total: t,
+			days: days,
+			hours: hours,
+			minutes: minutes,
+			seconds: seconds,
+		};
+	}
+	
+	function dueToDateFromString(dueString) {
+		const time = dueString.split(", ");
+		return new Date(new Date().getFullYear() + ' ' + time[1] + ' ' + time[2]);
+	}
+	
+	// Helper function to create the card view
+	function createCardView(isError = false) {
+		const div = document.createElement("div");
+		div.classList.add("card", "mb-4");
+		const parent = document.getElementById("content");
+		parent.insertBefore(div, parent.firstChild);
+		
+		const buttonId = isError ? "prairietrack-reload-btn-error" : "prairietrack-reload-btn";
+		const tableBody = isError 
+			? `<thead>
+				<tbody>
+					<td>
+						<span>There was an error loading PrairieTrack. This may happen after the userscript updates or when local storage is corrupted. Please click <b>Reload</b> to resolve this issue.</span>
+					</td>
+				</tbody>`
+			: `<thead>
+					<tr>
+						<th colspan="${isAssessmentsPage ? 2 : 3}">
+							All Upcoming Assessments
+						</th>
+						<th class="text-center">Due Time</th>
+						<th class="text-center">Score</th>
+					</tr>
+				</thead>
+				<tbody></tbody>`;
+		
+		div.innerHTML = /* html */ `
+			<div class="card-header bg-primary text-white d-flex align-items-center">PrairieTrack
+				<button type="button" class="btn btn-light btn-sm ms-auto ${
+					isPrairieLearnPage ? "" : "d-none"
+				}" id="${buttonId}">
+					<i class="bi bi-arrow-repeat me-sm-1" aria-hidden="true"></i>
+					<span class="d-none d-sm-inline">Reload</span>
+				</button>
+			</div>
+			<table class="table table-sm table-hover">
+				${tableBody}
+			</table>
+		`;
+		
+		return div;
+	}
+	
+	// Helper function to attach reload button event listener
+	function attachReloadListener(buttonId) {
+		if (isPrairieLearnPage) {
+			const reloadBtn = document.getElementById(buttonId);
+			if (reloadBtn) {
+				reloadBtn.addEventListener('click', reloadRows);
+			}
+		}
 	}
 	
 	// Centralized function to process a course document and extract formatted assessment rows
@@ -251,42 +325,10 @@
 			});
 		}
 		// create div
-		const div = document.createElement("div");
-		div.classList.add("card", "mb-4");
-		const parent = document.getElementById("content");
-		parent.insertBefore(div, parent.firstChild);
-		div.innerHTML = /* html */ `
-			<div class="card-header bg-primary text-white d-flex align-items-center">PrairieTrack
-				<button type="button" class="btn btn-light btn-sm ms-auto ${
-					isPrairieLearnPage ? "" : "d-none"
-				}" id="prairietrack-reload-btn">
-					<i class="bi bi-arrow-repeat me-sm-1" aria-hidden="true"></i>
-					<span class="d-none d-sm-inline">Reload</span>
-				</button>
-			</div>
-			<table class="table table-sm table-hover">
-				<thead>
-					<tr>
-						<th colspan="${
-							isAssessmentsPage ? 2 : 3
-						}">
-							All Upcoming Assessments
-						</th>
-						<th class="text-center">Due Time</th>
-						<th class="text-center">Score</th>
-					</tr>
-				</thead>
-				<tbody></tbody>
-			</table>
-		`;
+		const div = createCardView(false);
 		
 		// Attach event listener to reload button
-		if (isPrairieLearnPage) {
-			const reloadBtn = document.getElementById('prairietrack-reload-btn');
-			if (reloadBtn) {
-				reloadBtn.addEventListener('click', reloadRows);
-			}
-		}
+		attachReloadListener('prairietrack-reload-btn');
 		
 		function dueToDate(dueString) {
 			const time = dueString.split(", ");
@@ -331,27 +373,6 @@
 			const dueColumnIndex = isPrairieLearnPage ? 3 : 2;
 			const due = row.children[dueColumnIndex];
 			if (due && due.hasAttribute('data-due')) {
-				// Helper functions for time calculations
-				function getTimeRemaining(end) {
-					var t = Date.parse(end) - Date.parse(new Date());
-					var seconds = Math.floor((t / 1000) % 60);
-					var minutes = Math.floor((t / 1000 / 60) % 60);
-					var hours = Math.floor((t / (1000 * 60 * 60)) % 24);
-					var days = Math.floor(t / (1000 * 60 * 60 * 24));
-					return {
-						total: t,
-						days: days,
-						hours: hours,
-						minutes: minutes,
-						seconds: seconds,
-					};
-				}
-				
-				function dueToDateFromString(dueString) {
-					const time = dueString.split(", ");
-					return new Date(new Date().getFullYear() + ' ' + time[1] + ' ' + time[2]);
-				}
-				
 				due.addEventListener('mouseenter', function() {
 					// Show time remaining inline
 					const dueString = this.getAttribute('data-due');
@@ -366,35 +387,9 @@
 		});
 	} catch (e) {
 		showToast(`Error loading PrairieTrack: ${e.message}`, 'error');
-		const div = document.createElement("div");
-		div.classList.add("card", "mb-4");
-		const parent = document.getElementById("content");
-		parent.insertBefore(div, parent.firstChild);
-		div.innerHTML = /* html */ `
-			<div class="card-header bg-primary text-white d-flex align-items-center">PrairieTrack
-				<button type="button" class="btn btn-light btn-sm ms-auto ${
-					isPrairieLearnPage ? "" : "d-none"
-				}" id="prairietrack-reload-btn-error">
-					<i class="bi bi-arrow-repeat me-sm-1" aria-hidden="true"></i>
-					<span class="d-none d-sm-inline">Reload</span>
-				</button>
-			</div>
-			<table class="table table-sm table-hover">
-				<thead>
-				<tbody>
-					<td>
-						<span>There was an error loading PrairieTrack. This may happen after the userscript updates or when local storage is corrupted. Please click <b>Reload</b> to resolve this issue.</span>
-					</td>
-				</tbody>
-			</table>
-		`;
+		const div = createCardView(true);
 		
 		// Attach event listener to reload button in error case
-		if (isPrairieLearnPage) {
-			const reloadBtn = document.getElementById('prairietrack-reload-btn-error');
-			if (reloadBtn) {
-				reloadBtn.addEventListener('click', reloadRows);
-			}
-		}
+		attachReloadListener('prairietrack-reload-btn-error');
 	}
 })();
