@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PrairieTrack
 // @namespace    https://github.com/caburum/prairie-track
-// @version      1.3.0
+// @version      1.4.0
 // @description  Keep track of PrairieLearn and PrairieTest!
 // @author       caburum
 // @match        *://*.prairielearn.com/*
@@ -98,14 +98,34 @@
 		return new Date(new Date().getFullYear() + ' ' + time[1] + ' ' + time[2]);
 	}
 	
-	// Helper function to create the card view
-	function createCardView(isError = false) {
+	// Helper function to create the card structure (header and reload button are the same for both states)
+	function createCardStructure() {
 		const div = document.createElement("div");
 		div.classList.add("card", "mb-4");
 		const parent = document.getElementById("content");
 		parent.insertBefore(div, parent.firstChild);
 		
-		const buttonId = isError ? "prairietrack-reload-btn-error" : "prairietrack-reload-btn";
+		div.innerHTML = /* html */ `
+			<div class="card-header bg-primary text-white d-flex align-items-center">PrairieTrack
+				<button type="button" class="btn btn-light btn-sm ms-auto ${
+					isPrairieLearnPage ? "" : "d-none"
+				}" id="prairietrack-reload-btn">
+					<i class="bi bi-arrow-repeat me-sm-1" aria-hidden="true"></i>
+					<span class="d-none d-sm-inline">Reload</span>
+				</button>
+			</div>
+			<table class="table table-sm table-hover" id="prairietrack-table">
+			</table>
+		`;
+		
+		return div;
+	}
+	
+	// Helper function to set table content based on state
+	function setTableContent(isError = false) {
+		const table = document.getElementById('prairietrack-table');
+		if (!table) return;
+		
 		const tableBody = isError 
 			? `<thead>
 				<tbody>
@@ -124,31 +144,7 @@
 				</thead>
 				<tbody></tbody>`;
 		
-		div.innerHTML = /* html */ `
-			<div class="card-header bg-primary text-white d-flex align-items-center">PrairieTrack
-				<button type="button" class="btn btn-light btn-sm ms-auto ${
-					isPrairieLearnPage ? "" : "d-none"
-				}" id="${buttonId}">
-					<i class="bi bi-arrow-repeat me-sm-1" aria-hidden="true"></i>
-					<span class="d-none d-sm-inline">Reload</span>
-				</button>
-			</div>
-			<table class="table table-sm table-hover">
-				${tableBody}
-			</table>
-		`;
-		
-		return div;
-	}
-	
-	// Helper function to attach reload button event listener
-	function attachReloadListener(buttonId) {
-		if (isPrairieLearnPage) {
-			const reloadBtn = document.getElementById(buttonId);
-			if (reloadBtn) {
-				reloadBtn.addEventListener('click', reloadRows);
-			}
-		}
+		table.innerHTML = tableBody;
 	}
 	
 	// Centralized function to process a course document and extract formatted assessment rows
@@ -270,6 +266,18 @@
 			showToast(`Error reloading: ${error.message}`, 'error');
 		}
 	};
+	
+	// Create card structure once (same for both success and error states)
+	const div = createCardStructure();
+	
+	// Attach reload button event listener once
+	if (isPrairieLearnPage) {
+		const reloadBtn = document.getElementById('prairietrack-reload-btn');
+		if (reloadBtn) {
+			reloadBtn.addEventListener('click', reloadRows);
+		}
+	}
+	
 	try {
 		/** @type Element[] */
 		let rows = [];
@@ -324,11 +332,9 @@
 				}
 			});
 		}
-		// create div
-		const div = createCardView(false);
 		
-		// Attach event listener to reload button
-		attachReloadListener('prairietrack-reload-btn');
+		// Set table content for success state
+		setTableContent(false);
 		
 		function dueToDate(dueString) {
 			const time = dueString.split(", ");
@@ -387,9 +393,7 @@
 		});
 	} catch (e) {
 		showToast(`Error loading PrairieTrack: ${e.message}`, 'error');
-		const div = createCardView(true);
-		
-		// Attach event listener to reload button in error case
-		attachReloadListener('prairietrack-reload-btn-error');
+		// Set table content for error state
+		setTableContent(true);
 	}
 })();
