@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         PrairieTrack
 // @namespace    https://github.com/caburum/prairie-track
-// @version      1.0.0
+// @version      1.1.0
 // @description  Keep track of PrairieLearn and PrairieTest!
-// @author       Anthony Du
+// @author       caburum
 // @match        *://*.prairielearn.com/*
 // @grant        none
 // @run-at       document-end
@@ -76,6 +76,42 @@
 		return Date.now() - timestamp > STALE_TIME_MS;
 	}
 	
+	// Centralized function to process and format assessment rows
+	function processAssessmentRows(rowElements) {
+		// Clone and filter rows
+		const rows = rowElements.map((row) => row.cloneNode(true));
+		const filteredRows = rows.filter((row) => {
+			// Filter for incomplete assessments with upcoming due dates
+			if (row.children.length < 4) return false;
+			
+			const dueColumn = row.children[2];
+			const gradeColumn = row.children[3];
+			
+			let grade = parseFloat(gradeColumn.innerText);
+			return (
+				dueColumn.innerHTML.includes("until") &&
+				(isNaN(grade) || grade < 100)
+			);
+		});
+		
+		// Format dates and set data-due attribute
+		filteredRows.forEach((row) => {
+			const due = row.children[2];
+			const time = due.innerHTML
+				.trim()
+				.split(" ")
+				.slice(2, 6)
+				.join(" ")
+				.trim()
+				.split(", ");
+			[time[0], time[1], time[2]] = [time[1], time[2], time[0]];
+			due.setAttribute("data-due", time.join(", "));
+			due.innerHTML = due.getAttribute("data-due");
+		});
+		
+		return filteredRows;
+	}
+	
 	// Function to fetch and parse assessment data from a course
 	async function fetchCourseAssessments(courseUrl, courseInstanceId) {
 		try {
@@ -101,24 +137,11 @@
 				return null;
 			}
 			
-			const rows = rowElements.map((row) => row.cloneNode(true));
-			const filteredRows = rows.filter((row) => {
-				// Filter for incomplete assessments with upcoming due dates
-				// Note: This depends on PrairieLearn's column order and content format
-				if (row.children.length < 4) return false;
-				
-				const dueColumn = row.children[2];
-				const gradeColumn = row.children[3];
-				
-				let grade = parseFloat(gradeColumn.innerText);
-				return (
-					dueColumn.innerHTML.includes("until") &&
-					(isNaN(grade) || grade < 100)
-				);
-			});
+			// Use centralized processing function
+			const processedRows = processAssessmentRows(rowElements);
 			
 			// Add course metadata to rows
-			filteredRows.forEach((row) => {
+			processedRows.forEach((row) => {
 				if (row.children.length > 0) {
 					row.children[0].setAttribute("data-course-code", courseCode);
 					row.children[0].setAttribute("data-course-href", courseUrl);
@@ -127,7 +150,7 @@
 			
 			return {
 				courseInstanceId,
-				rows: filteredRows.map((row) => row.innerHTML),
+				rows: processedRows.map((row) => row.innerHTML),
 				timestamp: Date.now()
 			};
 		} catch (error) {
@@ -183,18 +206,11 @@
 				.querySelector("#main-nav > li:first-child")
 				.innerText.trim().split(",")[0];
 			courseHref = location.href.split("?")[0];
-			rows = Array.from(
+			const rowElements = Array.from(
 				document.querySelectorAll("#content table > tbody > tr:has(td)")
 			);
-			rows = rows.map((row) => row.cloneNode(true));
-			rows = rows.filter((row) => {
-				let grade = parseFloat(row.children[3].innerText);
-				return (
-					row.children[2].innerHTML.includes("until") &&
-					// !row.children[3].innerHTML === "New instance" &&
-					(isNaN(grade) || grade < 100)
-				);
-			});
+			// Use centralized processing function
+			rows = processAssessmentRows(rowElements);
 		} else if (isPrairieLearnPage) {
 			// Check for stale data and auto-refetch
 			const keys = Object.keys(window.localStorage).filter((key) =>
@@ -309,23 +325,6 @@
 		
 		function showDueDate(element) {
 			element.innerHTML = element.getAttribute('data-due');
-		}
-		
-		// format date
-		if (isAssessmentsPage) {
-			rows.forEach((row) => {
-				const due = row.children[2];
-				const time = due.innerHTML
-					.trim()
-					.split(" ")
-					.slice(2, 6)
-					.join(" ")
-					.trim()
-					.split(", ");
-				[time[0], time[1], time[2]] = [time[1], time[2], time[0]];
-				due.setAttribute("data-due", time.join(", "));
-				due.innerHTML = due.getAttribute("data-due");
-			});
 		}
 		function dueToDate(dueString) {
 			const time = dueString.split(", ");
