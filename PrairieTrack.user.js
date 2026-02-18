@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PrairieTrack
 // @namespace    https://github.com/caburum/prairie-track
-// @version      1.1.0
+// @version      1.2.0
 // @description  Keep track of PrairieLearn and PrairieTest!
 // @author       caburum
 // @match        *://*.prairielearn.com/*
@@ -13,8 +13,9 @@
 	"use strict";
 	
 	// Check if we should run on this page
-	const isAssessmentsPage = location.pathname.endsWith("assessments");
-	const isPrairieLearnPage = location.pathname === "/" || location.pathname.endsWith("pl") || location.pathname.endsWith("pl/");
+	const pathname = location.pathname.replace(/\/$/, ''); // Strip trailing slash
+	const isAssessmentsPage = pathname.endsWith("assessments");
+	const isPrairieLearnPage = pathname === "" || pathname.endsWith("pl");
 	if (!isAssessmentsPage && !isPrairieLearnPage) {
 		return;
 	}
@@ -76,8 +77,20 @@
 		return Date.now() - timestamp > STALE_TIME_MS;
 	}
 	
-	// Centralized function to process and format assessment rows
-	function processAssessmentRows(rowElements) {
+	// Centralized function to process a course document and extract formatted assessment rows
+	function processCourse(doc, courseUrl) {
+		// Extract course code (selector depends on PrairieLearn's DOM structure)
+		const courseCode = doc.querySelector("#main-nav > li:first-child")?.innerText.trim().split(",")[0];
+		if (!courseCode) {
+			return null;
+		}
+		
+		// Extract assessment rows (selector depends on PrairieLearn's table structure)
+		const rowElements = Array.from(doc.querySelectorAll("#content table > tbody > tr:has(td)"));
+		if (rowElements.length === 0) {
+			return null;
+		}
+		
 		// Clone and filter rows
 		const rows = rowElements.map((row) => row.cloneNode(true));
 		const filteredRows = rows.filter((row) => {
@@ -107,9 +120,16 @@
 			[time[0], time[1], time[2]] = [time[1], time[2], time[0]];
 			due.setAttribute("data-due", time.join(", "));
 			due.innerHTML = due.getAttribute("data-due");
+			
+			// Set course metadata on each row
+			row.children[0].setAttribute("data-course-code", courseCode);
+			row.children[0].setAttribute("data-course-href", courseUrl || location.href.split("?")[0]);
 		});
 		
-		return filteredRows;
+		return {
+			courseCode,
+			rows: filteredRows
+		};
 	}
 	
 	// Function to fetch and parse assessment data from a course
@@ -123,38 +143,19 @@
 			const parser = new DOMParser();
 			const doc = parser.parseFromString(html, 'text/html');
 			
-			// Extract course code (selector depends on PrairieLearn's DOM structure)
-			const courseCode = doc.querySelector("#main-nav > li:first-child")?.innerText.trim().split(",")[0];
-			if (!courseCode) {
-				console.warn(`Could not extract course code from ${courseUrl}`);
-				return null;
-			}
-			
-			// Extract assessment rows (selector depends on PrairieLearn's table structure)
-			const rowElements = Array.from(doc.querySelectorAll("#content table > tbody > tr:has(td)"));
-			if (rowElements.length === 0) {
-				console.warn(`No assessment rows found for ${courseUrl}`);
-				return null;
-			}
-			
 			// Use centralized processing function
-			const processedRows = processAssessmentRows(rowElements);
-			
-			// Add course metadata to rows
-			processedRows.forEach((row) => {
-				if (row.children.length > 0) {
-					row.children[0].setAttribute("data-course-code", courseCode);
-					row.children[0].setAttribute("data-course-href", courseUrl);
-				}
-			});
+			const result = processCourse(doc, courseUrl);
+			if (!result) {
+				return null;
+			}
 			
 			return {
 				courseInstanceId,
-				rows: processedRows.map((row) => row.innerHTML),
+				rows: result.rows.map((row) => row.innerHTML),
 				timestamp: Date.now()
 			};
 		} catch (error) {
-			console.error(`Error fetching assessments for ${courseUrl}:`, error);
+			showToast(`Error fetching course ${courseInstanceId}: ${error.message}`, 'error');
 			return null;
 		}
 	}
@@ -192,25 +193,18 @@
 			showToast('Assessments reloaded successfully!', 'success');
 			setTimeout(() => location.reload(), RELOAD_DELAY_MS);
 		} catch (error) {
-			console.error('Error reloading assessments:', error);
-			showToast('Error reloading assessments', 'error');
+			showToast(`Error reloading: ${error.message}`, 'error');
 		}
 	};
 	try {
 		/** @type Element[] */
 		let rows = [];
-		let courseCode = "";
-		let courseHref = "";
 		if (isAssessmentsPage) {
-			courseCode = document
-				.querySelector("#main-nav > li:first-child")
-				.innerText.trim().split(",")[0];
-			courseHref = location.href.split("?")[0];
-			const rowElements = Array.from(
-				document.querySelectorAll("#content table > tbody > tr:has(td)")
-			);
 			// Use centralized processing function
-			rows = processAssessmentRows(rowElements);
+			const result = processCourse(document);
+			if (result) {
+				rows = result.rows;
+			}
 		} else if (isPrairieLearnPage) {
 			// Check for stale data and auto-refetch
 			const keys = Object.keys(window.localStorage).filter((key) =>
@@ -241,7 +235,6 @@
 				}
 			}
 			
-			console.log(keys);
 			keys.forEach((key) => {
 				try {
 					const data = JSON.parse(window.localStorage.getItem(key));
@@ -253,10 +246,9 @@
 						rows.push(tr);
 					});
 				} catch (e) {
-					console.error(`Error parsing localStorage key ${key}:`, e);
+					showToast(`Error loading stored data: ${e.message}`, 'error');
 				}
 			});
-			console.log(rows);
 		}
 		// create div
 		const div = document.createElement("div");
@@ -296,36 +288,6 @@
 			}
 		}
 		
-		// Helper functions for time remaining display
-		function getTimeRemaining(end) {
-			var t = Date.parse(end) - Date.parse(new Date());
-			var seconds = Math.floor((t / 1000) % 60);
-			var minutes = Math.floor((t / 1000 / 60) % 60);
-			var hours = Math.floor((t / (1000 * 60 * 60)) % 24);
-			var days = Math.floor(t / (1000 * 60 * 60 * 24));
-			return {
-				total: t,
-				days: days,
-				hours: hours,
-				minutes: minutes,
-				seconds: seconds,
-			};
-		}
-		
-		function dueToDateFromString(dueString) {
-			const time = dueString.split(", ");
-			return new Date(new Date().getFullYear() + ' ' + time[1] + ' ' + time[2]);
-		}
-		
-		function showTimeRemaining(element) {
-			const dueString = element.getAttribute('data-due');
-			const time = getTimeRemaining(dueToDateFromString(dueString));
-			element.innerHTML = time.days + 'd ' + time.hours + 'h ' + time.minutes + 'm remain';
-		}
-		
-		function showDueDate(element) {
-			element.innerHTML = element.getAttribute('data-due');
-		}
 		function dueToDate(dueString) {
 			const time = dueString.split(", ");
 			return new Date(`${new Date().getFullYear()} ${time[1]} ${time[2]}`);
@@ -339,10 +301,6 @@
 		// update local storage
 		if (isAssessmentsPage) {
 			const key = `prairieTrack-${location.pathname.split("/")[3]}`;
-			rows.forEach((row) => {
-				row.children[0].setAttribute("data-course-code", courseCode);
-				row.children[0].setAttribute("data-course-href", courseHref);
-			});
 			window.localStorage.setItem(
 				key,
 				JSON.stringify({
@@ -373,16 +331,41 @@
 			const dueColumnIndex = isPrairieLearnPage ? 3 : 2;
 			const due = row.children[dueColumnIndex];
 			if (due && due.hasAttribute('data-due')) {
+				// Helper functions for time calculations
+				function getTimeRemaining(end) {
+					var t = Date.parse(end) - Date.parse(new Date());
+					var seconds = Math.floor((t / 1000) % 60);
+					var minutes = Math.floor((t / 1000 / 60) % 60);
+					var hours = Math.floor((t / (1000 * 60 * 60)) % 24);
+					var days = Math.floor(t / (1000 * 60 * 60 * 24));
+					return {
+						total: t,
+						days: days,
+						hours: hours,
+						minutes: minutes,
+						seconds: seconds,
+					};
+				}
+				
+				function dueToDateFromString(dueString) {
+					const time = dueString.split(", ");
+					return new Date(new Date().getFullYear() + ' ' + time[1] + ' ' + time[2]);
+				}
+				
 				due.addEventListener('mouseenter', function() {
-					showTimeRemaining(this);
+					// Show time remaining inline
+					const dueString = this.getAttribute('data-due');
+					const time = getTimeRemaining(dueToDateFromString(dueString));
+					this.innerHTML = time.days + 'd ' + time.hours + 'h ' + time.minutes + 'm remain';
 				});
 				due.addEventListener('mouseleave', function() {
-					showDueDate(this);
+					// Restore due date inline
+					this.innerHTML = this.getAttribute('data-due');
 				});
 			}
 		});
 	} catch (e) {
-		console.log(e);
+		showToast(`Error loading PrairieTrack: ${e.message}`, 'error');
 		const div = document.createElement("div");
 		div.classList.add("card", "mb-4");
 		const parent = document.getElementById("content");
