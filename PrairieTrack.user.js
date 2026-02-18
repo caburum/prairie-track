@@ -70,7 +70,7 @@
 	}
 	
 	const isAssessmentsPage = location.pathname.endsWith("assessments");
-	const isPrairieLearnPage = location.pathname === "/" || location.pathname.endsWith("pl");
+	const isPrairieLearnPage = location.pathname === "/" || location.pathname.endsWith("pl") || location.pathname.endsWith("pl/");
 	if (!isAssessmentsPage && !isPrairieLearnPage) {
 		return;
 	}
@@ -151,7 +151,9 @@
 		
 		const promises = Array.from(courses).map(async (a) => {
 			const courseUrl = a.href;
-			const courseInstanceId = courseUrl.split('/')[4];
+			// Extract courseInstanceId from URL pathname (format: /pl/course_instance/XXXXX)
+			const urlPath = new URL(courseUrl).pathname;
+			const courseInstanceId = urlPath.split('/')[3]; // Gets XXXXX from /pl/course_instance/XXXXX
 			const data = await fetchCourseAssessments(courseUrl, courseInstanceId);
 			
 			if (data && data.rows.length > 0) {
@@ -275,29 +277,38 @@
 				reloadBtn.addEventListener('click', reloadRows);
 			}
 		}
-		const timeRemaining = /* js */ `
-			// https://gist.github.com/alirezas/4b4488d6f9eced7b65ca9c5f73a52230
-			function getTimeRemaining(end) {
-				var t = Date.parse(end) - Date.parse(new Date());
-				var seconds = Math.floor((t / 1000) % 60);
-				var minutes = Math.floor((t / 1000 / 60) % 60);
-				var hours = Math.floor((t / (1000 * 60 * 60)) % 24);
-				var days = Math.floor(t / (1000 * 60 * 60 * 24));
-				return {
-					total: t,
-					days: days,
-					hours: hours,
-					minutes: minutes,
-					seconds: seconds,
-				};
-			}
-			function dueToDate(dueString) {
-				const time = dueString.split(", ");
-				return new Date(new Date().getFullYear() + ' ' + time[1] + ' ' + time[2]);
-			}
-			const time = getTimeRemaining(dueToDate(this.getAttribute('data-due')));
-			this.innerHTML = time.days + 'd ' + time.hours + 'h ' + time.minutes + 'm remain';
-		`;
+		
+		// Helper functions for time remaining display
+		function getTimeRemaining(end) {
+			var t = Date.parse(end) - Date.parse(new Date());
+			var seconds = Math.floor((t / 1000) % 60);
+			var minutes = Math.floor((t / 1000 / 60) % 60);
+			var hours = Math.floor((t / (1000 * 60 * 60)) % 24);
+			var days = Math.floor(t / (1000 * 60 * 60 * 24));
+			return {
+				total: t,
+				days: days,
+				hours: hours,
+				minutes: minutes,
+				seconds: seconds,
+			};
+		}
+		
+		function dueToDateFromString(dueString) {
+			const time = dueString.split(", ");
+			return new Date(new Date().getFullYear() + ' ' + time[1] + ' ' + time[2]);
+		}
+		
+		function showTimeRemaining(element) {
+			const dueString = element.getAttribute('data-due');
+			const time = getTimeRemaining(dueToDateFromString(dueString));
+			element.innerHTML = time.days + 'd ' + time.hours + 'h ' + time.minutes + 'm remain';
+		}
+		
+		function showDueDate(element) {
+			element.innerHTML = element.getAttribute('data-due');
+		}
+		
 		// format date
 		if (isAssessmentsPage) {
 			rows.forEach((row) => {
@@ -312,11 +323,13 @@
 				[time[0], time[1], time[2]] = [time[1], time[2], time[0]];
 				due.setAttribute("data-due", time.join(", "));
 				due.innerHTML = due.getAttribute("data-due");
-				due.setAttribute("onmouseenter", timeRemaining);
-				due.setAttribute(
-					"onmouseleave",
-					"this.innerHTML = this.getAttribute('data-due')"
-				);
+				// Use proper event listeners instead of inline attributes
+				due.addEventListener('mouseenter', function() {
+					showTimeRemaining(this);
+				});
+				due.addEventListener('mouseleave', function() {
+					showDueDate(this);
+				});
 			});
 		}
 		function dueToDate(dueString) {
