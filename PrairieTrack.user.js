@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PrairieTrack
 // @namespace    https://github.com/caburum/prairie-track
-// @version      0.5.0
+// @version      1.0.0
 // @description  Keep track of PrairieLearn and PrairieTest!
 // @author       Anthony Du
 // @match        *://*.prairielearn.com/*
@@ -11,6 +11,13 @@
 
 (() => {
 	"use strict";
+	
+	// Check if we should run on this page
+	const isAssessmentsPage = location.pathname.endsWith("assessments");
+	const isPrairieLearnPage = location.pathname === "/" || location.pathname.endsWith("pl") || location.pathname.endsWith("pl/");
+	if (!isAssessmentsPage && !isPrairieLearnPage) {
+		return;
+	}
 	
 	// Configuration
 	const STALE_TIME_MS = 3 * 60 * 60 * 1000; // 3 hours
@@ -69,11 +76,6 @@
 		return Date.now() - timestamp > STALE_TIME_MS;
 	}
 	
-	const isAssessmentsPage = location.pathname.endsWith("assessments");
-	const isPrairieLearnPage = location.pathname === "/" || location.pathname.endsWith("pl") || location.pathname.endsWith("pl/");
-	if (!isAssessmentsPage && !isPrairieLearnPage) {
-		return;
-	}
 	// Function to fetch and parse assessment data from a course
 	async function fetchCourseAssessments(courseUrl, courseInstanceId) {
 		try {
@@ -323,13 +325,6 @@
 				[time[0], time[1], time[2]] = [time[1], time[2], time[0]];
 				due.setAttribute("data-due", time.join(", "));
 				due.innerHTML = due.getAttribute("data-due");
-				// Use proper event listeners instead of inline attributes
-				due.addEventListener('mouseenter', function() {
-					showTimeRemaining(this);
-				});
-				due.addEventListener('mouseleave', function() {
-					showDueDate(this);
-				});
 			});
 		}
 		function dueToDate(dueString) {
@@ -372,6 +367,20 @@
 				row.insertBefore(td, row.children[0]);
 			}
 			div.getElementsByTagName("tbody")[0].appendChild(row);
+			
+			// Add hover event listeners for time remaining display
+			// On main page, due date is in column 3 (after course code column)
+			// On assessment page, due date is in column 2
+			const dueColumnIndex = isPrairieLearnPage ? 3 : 2;
+			const due = row.children[dueColumnIndex];
+			if (due && due.hasAttribute('data-due')) {
+				due.addEventListener('mouseenter', function() {
+					showTimeRemaining(this);
+				});
+				due.addEventListener('mouseleave', function() {
+					showDueDate(this);
+				});
+			}
 		});
 	} catch (e) {
 		console.log(e);
