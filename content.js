@@ -126,13 +126,13 @@
       key.startsWith('prairieTrack-') ? window.localStorage.removeItem(key) : null
     );
     
-    const courses = document.querySelectorAll(\`a[href^='/pl/course_instance/']:not([href$='/'])\`);
+    const courses = document.querySelectorAll(`a[href^='/pl/course_instance/']:not([href$='/'])`);
     if (courses.length === 0) {
       showToast('No courses found to reload', 'error');
       return;
     }
     
-    showToast(\`Reloading \${courses.length} course(s)...\`, 'info');
+    showToast(`Reloading ${courses.length} course(s)...`, 'info');
     
     const promises = Array.from(courses).map(async (a) => {
       const courseUrl = a.href;
@@ -140,7 +140,7 @@
       const data = await fetchCourseAssessments(courseUrl, courseInstanceId);
       
       if (data && data.rows.length > 0) {
-        const key = \`prairieTrack-\${courseInstanceId}\`;
+        const key = `prairieTrack-${courseInstanceId}`;
         window.localStorage.setItem(key, JSON.stringify(data));
       }
     });
