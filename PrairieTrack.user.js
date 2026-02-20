@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         PrairieTrack
 // @namespace    https://github.com/caburum/prairie-track
-// @version      1.4.0
+// @version      1.5.0
 // @description  Keep track of PrairieLearn and PrairieTest!
 // @author       caburum
 // @match        *://*.prairielearn.com/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @connect      us.prairietest.com
 // @run-at       document-end
 // ==/UserScript==
 
@@ -24,9 +25,7 @@
 	const STALE_TIME_MS = 3 * 60 * 60 * 1000; // 3 hours
 	const RELOAD_DELAY_MS = 500; // Delay before reloading page after successful fetch
 	
-	// Toast notification helper using Bootstrap toasts
-	function showToast(message, type = 'info') {
-		// Create toast container if it doesn't exist
+	function showToast(message, type = 'info', autohide = true, onClose = null) {
 		let toastContainer = document.getElementById('prairietrack-toast-container');
 		if (!toastContainer) {
 			toastContainer = document.createElement('div');
@@ -35,38 +34,32 @@
 			toastContainer.style.zIndex = '9999';
 			document.body.appendChild(toastContainer);
 		}
-		
-		// Determine toast class and icon based on type
-		const typeConfig = {
-			'success': { bg: 'bg-success', icon: 'bi-check-circle-fill' },
-			'error': { bg: 'bg-danger', icon: 'bi-x-circle-fill' },
-			'info': { bg: 'bg-primary', icon: 'bi-info-circle-fill' }
-		};
-		const config = typeConfig[type] || typeConfig['info'];
-		
-		// Create toast element
-		const toastId = 'toast-' + Date.now();
+
+		const config = {
+			'success': { bg: 'success', text: 'white',  icon: 'bi-check-circle-fill' },
+			'error': { bg: 'danger', text: 'white', icon: 'bi-x-circle-fill' },
+			'warning': { bg: 'warning', text: 'dark', icon: 'bi-exclamation-triangle-fill' }
+		}[type] || { bg: 'primary', text: 'white', icon: 'bi-info-circle-fill' };
+
+		const toastId = 'toast-' + Math.random().toString(36).substr(2, 9);
 		const toastHtml = `
-			<div id="${toastId}" class="toast align-items-center text-white ${config.bg} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+			<div id="${toastId}" class="toast align-items-center bg-${config.bg} text-${config.text} border-0" role="alert" aria-live="assertive" aria-atomic="true">
 				<div class="d-flex">
 					<div class="toast-body">
 						<i class="bi ${config.icon} me-2"></i>${message}
 					</div>
-					<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+					<button type="button" class="btn-close btn-close-${config.text} me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
 				</div>
 			</div>
 		`;
-		
-		// Insert toast into container
+
 		toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-		
-		// Initialize and show Bootstrap toast
 		const toastElement = document.getElementById(toastId);
-		const bsToast = new bootstrap.Toast(toastElement, { autohide: true, delay: 4000 });
+		const bsToast = new bootstrap.Toast(toastElement, { autohide: autohide, delay: 4000 });
 		bsToast.show();
-		
-		// Remove toast element after it's hidden
+
 		toastElement.addEventListener('hidden.bs.toast', () => {
+			if (onClose) onClose();
 			toastElement.remove();
 		});
 	}
@@ -229,9 +222,49 @@
 			return null;
 		}
 	}
-	
+
+	async function fetchAndCachePrairieTest() {
+		return new Promise((resolve) => {
+			showToast('Reloading PrairieTest exams', 'info');
+			GM_xmlhttpRequest({
+				method: "GET",
+				url: "https://us.prairietest.com/",
+				onload: function(response) {
+					if (response.status !== 200) {
+						showToast(`Error loading PrairieTest: ${response.status}`, 'error');
+						return resolve();
+					}
+
+					const parser = new DOMParser();
+					const doc = parser.parseFromString(response.responseText, 'text/html');
+					const ptListGroup = doc.querySelector('.card .list-group');
+
+					if (ptListGroup) {
+						ptListGroup.querySelectorAll('a').forEach(a => {
+							const href = a.getAttribute('href');
+							if (href && href.startsWith('/')) {
+								a.href = 'https://us.prairietest.com' + href;
+							}
+							a.setAttribute('target', '_blank');
+						});
+
+						window.localStorage.setItem('prairieTrack-tests', JSON.stringify({
+							html: ptListGroup.outerHTML,
+							timestamp: Date.now()
+						}));
+					}
+					resolve();
+				},
+				onerror: (e) => {
+					showToast(`Error loading PrairieTest: ${e}`, 'error');
+					resolve();
+				}
+			});
+		});
+	}
+
 	// Reload function using fetch instead of window.open
-	const reloadRows = async function() {
+	const reload = async function() {
 		// Clear old data
 		Object.keys(window.localStorage).forEach(key =>
 			key.startsWith('prairieTrack-') ? window.localStorage.removeItem(key) : null
@@ -259,8 +292,8 @@
 		});
 		
 		try {
-			await Promise.all(promises);
-			showToast('Assessments reloaded successfully!', 'success');
+			await Promise.all([...promises, fetchAndCachePrairieTest()]);
+			showToast('Reloaded successfully!', 'success');
 			setTimeout(() => location.reload(), RELOAD_DELAY_MS);
 		} catch (error) {
 			showToast(`Error reloading: ${error.message}`, 'error');
@@ -270,23 +303,18 @@
 	// Create card structure once (same for both success and error states)
 	const div = createCardStructure();
 	
-	// Attach reload button event listener once
 	if (isPrairieLearnPage) {
-		const reloadBtn = document.getElementById('prairietrack-reload-btn');
-		if (reloadBtn) {
-			reloadBtn.addEventListener('click', reloadRows);
-		}
+		document.getElementById('prairietrack-reload-btn')?.addEventListener('click', reload);
 	}
 	
 	try {
 		/** @type Element[] */
 		let rows = [];
+
 		if (isAssessmentsPage) {
 			// Use centralized processing function
 			const result = processCourse(document);
-			if (result) {
-				rows = result.rows;
-			}
+			if (result) rows = result.rows;
 		} else if (isPrairieLearnPage) {
 			// Check for stale data and auto-refetch
 			const keys = Object.keys(window.localStorage).filter((key) =>
@@ -294,45 +322,27 @@
 			);
 			
 			let hasStaleData = false;
-			if (keys.length > 0) {
-				// Check if any data is stale
-				for (const key of keys) {
-					try {
-						const data = JSON.parse(window.localStorage.getItem(key));
-						if (isDataStale(data.timestamp)) {
-							hasStaleData = true;
-							break;
-						}
-					} catch (e) {
-						hasStaleData = true;
-						break;
-					}
-				}
-				
-				// Auto-refetch if data is stale
-				if (hasStaleData) {
-					showToast('Assessment data is stale, refreshing...', 'info');
-					// Wait a bit before reloading to ensure UI is ready
-					setTimeout(() => reloadRows(), RELOAD_DELAY_MS);
-				}
-			}
-			
 			keys.forEach((key) => {
 				try {
 					const data = JSON.parse(window.localStorage.getItem(key));
-					// Handle both old format (array) and new format (object with timestamp)
-					const rowsData = Array.isArray(data) ? data : (data.rows || []);
-					rowsData.forEach((row) => {
+					if (isDataStale(data.timestamp)) hasStaleData = true;
+
+					data.rows?.forEach((row) => {
 						const tr = document.createElement("tr");
 						tr.innerHTML = row;
 						rows.push(tr);
 					});
+
+					// for prairietest (not a table)
+					if (data.html) div.insertAdjacentHTML('beforeend', data.html);
 				} catch (e) {
 					showToast(`Error loading stored data: ${e.message}`, 'error');
 				}
 			});
+
+			if (hasStaleData) reloadRows();
 		}
-		
+	
 		// Set table content for success state
 		setTableContent(false);
 		
